@@ -1,0 +1,2149 @@
+# CAPSTONE - PAM
+# TEAM OHIO
+# PRED 498 - WINTER 2016
+
+setwd("/Users/Scott/Dropbox/Northwestern/PRED 498 - Capstone/Project")
+
+getwd() # Verify working directory
+
+data <- read.csv("PAM_Master.csv", sep=",", header=TRUE)
+
+sum(is.na(data))# cHECK NUMBER MISSING VARS
+
+# Load Packages
+library(lattice)       # Graphics
+library(plyr)          # Graphics
+library(rpart)         # Tree
+library(ggplot2)       # Graphics
+library(gbm)           # Generalized Boosted Regression Models
+library(adabag)        # Classification with Boosting and Bagging
+library(randomForest)  # Random Forest
+library(e1071)         # Support Vector Machine (SVM)
+library(rpart.plot)    # Clean rpart plots
+library(pastecs)       # 'Fancy' summary statistics
+library(Hmisc)
+library(stats)
+library(dplyr)
+library(rpart)
+library(tree)
+library(rattle)
+library(aod)
+library(caret)
+library(sensitivity)
+library(pROC)
+library(lmtest)
+library(pscl)
+library(Amelia)
+library(gains)
+library(lift)
+
+# EDA
+class(data)
+names(data)
+str(data)
+
+summary(data)
+
+stat.desc(data)
+
+
+# Recode Activity and Subjects as Factor
+data$activityID <- as.factor(data$activityID)
+data$Subject <- as.factor(data$Subject)
+
+# Coded HR binary separation at .1 above the median for the 9 subjects
+HR.Median = 0
+HR.Median <- ifelse(data$HR >=104.1, HR.Median+1, HR.Median)
+
+data <- cbind(data, HR.Median)
+summary(data)
+
+missmap(data)
+
+
+# Subset Activities
+# Lying, Sitting, Standing, Watching TV, Comp Work, Car Driving
+Daily <- subset(data, activityID=="1"|activityID=="2"|activityID=="3"|
+                  activityID=="9"|activityID=="10"|activityID=="11")
+summary(Daily)
+
+# Descending Stairs, Walking, Vacuum Cleaning, Ironing, Folding Laundry, House Cleaning
+Chores <- subset(data, activityID=="4"|activityID=="13"|activityID=="16"|
+                   activityID=="17"|activityID=="18"|activityID=="19")
+summary(Chores)
+
+# Running, Cycling, Nordic Walking, Ascending Stairs, Playing Soccer, Rope Jumping
+Intensity <- subset(data, activityID=="5"|activityID=="6"|activityID=="7"|
+                      activityID=="12"|activityID=="20"|activityID=="24")
+summary(Intensity)
+
+
+# HR.Median means
+#	Daily mean = .02883
+#	Chores mean = .4762
+#	Intensity mean = .9568
+
+# Daily Boxplots
+boxplot(Time ~ HR.Median, data=Daily, xlab="HR Category", ylab="Time", main="Daily Subset Boxplots")
+
+#Temp
+boxplot(HandTemp ~ HR.Median, data=Daily, xlab="HR Category", ylab="Hand Temperature", main="Daily Subset Boxplots")
+boxplot(ChestTemp ~ HR.Median, data=Daily, xlab="HR Category", ylab="Chest Temperature", main="Daily Subset Boxplots")
+boxplot(AnkleTemp ~ HR.Median, data=Daily, xlab="HR Category", ylab="Ankle Temperature", main="Daily Subset Boxplots")
+
+#Accel
+boxplot(HandAccel16.1 ~ HR.Median, data=Daily, xlab="HR Category", ylab="HandAccel16.1", main="Daily Subset Boxplots") #Min separation
+boxplot(HandAccel16.2 ~ HR.Median, data=Daily, xlab="HR Category", ylab="HandAccel16.2", main="Daily Subset Boxplots") #Many outliers
+boxplot(HandAccel16.3 ~ HR.Median, data=Daily, xlab="HR Category", ylab="HandAccel16.3", main="Daily Subset Boxplots") #best of 3?
+
+boxplot(ChestAccel16.1 ~ HR.Median, data=Daily, xlab="HR Category", ylab="ChestAccel16.1", main="Daily Subset Boxplots") #Many outliers
+boxplot(ChestAccel16.2 ~ HR.Median, data=Daily, xlab="HR Category", ylab="ChestAccel16.2", main="Daily Subset Boxplots") #clear separation
+boxplot(ChestAccel16.3 ~ HR.Median, data=Daily, xlab="HR Category", ylab="ChestAccel16.3", main="Daily Subset Boxplots") #Good separation
+
+boxplot(AnkleAccel16.1 ~ HR.Median, data=Daily, xlab="HR Category", ylab="AnkleAccel16.1", main="Daily Subset Boxplots") #OK separation
+boxplot(AnkleAccel16.2 ~ HR.Median, data=Daily, xlab="HR Category", ylab="AnkleAccel16.2", main="Daily Subset Boxplots") #min separation
+boxplot(AnkleAccel16.3 ~ HR.Median, data=Daily, xlab="HR Category", ylab="AnkleAccel16.3", main="Daily Subset Boxplots") #min separation
+
+#Gyro
+boxplot(HandGyro.1 ~ HR.Median, data=Daily, xlab="HR Category", ylab="HandGyro1", main="Daily Subset Boxplots") #many outliers
+boxplot(HandGyro.2 ~ HR.Median, data=Daily, xlab="HR Category", ylab="HandGyro2", main="Daily Subset Boxplots") #many outliers
+boxplot(HandGyro.3 ~ HR.Median, data=Daily, xlab="HR Category", ylab="HandGyro3", main="Daily Subset Boxplots") #many outliers
+
+boxplot(ChestGyro.1 ~ HR.Median, data=Daily, xlab="HR Category", ylab="ChestGyro1", main="Daily Subset Boxplots") #many outliers
+boxplot(ChestGyro.2 ~ HR.Median, data=Daily, xlab="HR Category", ylab="ChestGyro2", main="Daily Subset Boxplots") #many outliers
+boxplot(ChestGyro.3 ~ HR.Median, data=Daily, xlab="HR Category", ylab="ChestGyro3", main="Daily Subset Boxplots") #many outliers
+
+boxplot(AnkleGyro.1 ~ HR.Median, data=Daily, xlab="HR Category", ylab="AnkleGyro1", main="Daily Subset Boxplots") #many outliers
+boxplot(AnkleGyro.2 ~ HR.Median, data=Daily, xlab="HR Category", ylab="AnkleGyro2", main="Daily Subset Boxplots") #many outliers
+boxplot(AnkleGyro.3 ~ HR.Median, data=Daily, xlab="HR Category", ylab="AnkleGyro3", main="Daily Subset Boxplots") #many outliers
+
+#Magnet
+boxplot(HandMag.1 ~ HR.Median, data=Daily, xlab="HR Category", ylab="HandMag1", main="Daily Subset Boxplots") #inverse
+boxplot(HandMag.2 ~ HR.Median, data=Daily, xlab="HR Category", ylab="HandMag2", main="Daily Subset Boxplots") #inverse
+boxplot(HandMag.3 ~ HR.Median, data=Daily, xlab="HR Category", ylab="HandMag3", main="Daily Subset Boxplots") #inverse
+
+boxplot(ChestMag.1 ~ HR.Median, data=Daily, xlab="HR Category", ylab="ChestMag1", main="Daily Subset Boxplots") #min separation
+boxplot(ChestMag.2 ~ HR.Median, data=Daily, xlab="HR Category", ylab="ChestMag2", main="Daily Subset Boxplots") #min separation
+boxplot(ChestMag.3 ~ HR.Median, data=Daily, xlab="HR Category", ylab="ChestMag3", main="Daily Subset Boxplots") #min separation
+
+boxplot(AnkleMag.1 ~ HR.Median, data=Daily, xlab="HR Category", ylab="AnkleMag1", main="Daily Subset Boxplots")
+boxplot(AnkleMag.2 ~ HR.Median, data=Daily, xlab="HR Category", ylab="AnkleMag2", main="Daily Subset Boxplots")
+boxplot(AnkleMag.3 ~ HR.Median, data=Daily, xlab="HR Category", ylab="AnkleMag3", main="Daily Subset Boxplots")
+
+
+# Daily Histograms
+hist(Daily$Time)
+hist(Daily$HR)
+
+#Temp
+hist(Daily$HandTemp)
+hist(Daily$ChestTemp)
+hist(Daily$AnkleTemp)
+
+#Accel
+hist(Daily$HandAccel16.1)
+hist(Daily$HandAccel16.2)
+hist(Daily$HandAccel16.3)
+
+hist(Daily$ChestAccel16.1)
+hist(Daily$ChestAccel16.2)
+hist(Daily$ChestAccel16.3)
+
+hist(Daily$AnkleAccel16.1)
+hist(Daily$AnkleAccel16.2)
+hist(Daily$AnkleAccel16.3)
+
+#Gyro
+hist(Daily$HandGyro.1)
+hist(Daily$HandGyro.2)
+hist(Daily$HandGyro.3)
+
+hist(Daily$ChestGyro.1)
+hist(Daily$ChestGyro.2)
+hist(Daily$ChestGyro.3)
+
+hist(Daily$AnkleGyro.1)
+hist(Daily$AnkleGyro.2)
+hist(Daily$AnkleGyro.3)
+
+#Magnet
+hist(Daily$HandMag.1)
+hist(Daily$HandMag.2)
+hist(Daily$HandMag.3)
+
+hist(Daily$ChestMag.1)
+hist(Daily$ChestMag.2)
+hist(Daily$ChestMag.3)
+
+hist(Daily$AnkleMag.1)
+hist(Daily$AnkleMag.2)
+hist(Daily$AnkleMag.3)
+
+
+
+
+
+# Intensity Boxplots
+boxplot(Time ~ HR.Median, data=Intensity, xlab="HR Category", ylab="Time", main="Intensity Subset Boxplots")
+
+#Temp
+boxplot(HandTemp ~ HR.Median, data=Intensity, xlab="HR Category", ylab="Hand Temperature", main="Intensity Subset Boxplots")
+boxplot(ChestTemp ~ HR.Median, data=Intensity, xlab="HR Category", ylab="Chest Temperature", main="Intensity Subset Boxplots")
+boxplot(AnkleTemp ~ HR.Median, data=Intensity, xlab="HR Category", ylab="Ankle Temperature", main="Intensity Subset Boxplots")
+
+#Accel
+boxplot(HandAccel16.1 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="HandAccel16.1", main="Intensity Subset Boxplots") 
+boxplot(HandAccel16.2 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="HandAccel16.2", main="Intensity Subset Boxplots") 
+boxplot(HandAccel16.3 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="HandAccel16.3", main="Intensity Subset Boxplots") 
+
+boxplot(ChestAccel16.1 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="ChestAccel16.1", main="Intensity Subset Boxplots") 
+boxplot(ChestAccel16.2 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="ChestAccel16.2", main="Intensity Subset Boxplots") 
+boxplot(ChestAccel16.3 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="ChestAccel16.3", main="Intensity Subset Boxplots") 
+
+boxplot(AnkleAccel16.1 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="AnkleAccel16.1", main="Intensity Subset Boxplots") 
+boxplot(AnkleAccel16.2 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="AnkleAccel16.2", main="Intensity Subset Boxplots") 
+boxplot(AnkleAccel16.3 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="AnkleAccel16.3", main="Intensity Subset Boxplots")
+
+#Gyro
+boxplot(HandGyro.1 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="HandGyro1", main="Intensity Subset Boxplots") 
+boxplot(HandGyro.2 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="HandGyro2", main="Intensity Subset Boxplots") 
+boxplot(HandGyro.3 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="HandGyro3", main="Intensity Subset Boxplots") 
+
+boxplot(ChestGyro.1 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="ChestGyro1", main="Intensity Subset Boxplots") 
+boxplot(ChestGyro.2 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="ChestGyro2", main="Intensity Subset Boxplots")
+boxplot(ChestGyro.3 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="ChestGyro3", main="Intensity Subset Boxplots") 
+
+boxplot(AnkleGyro.1 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="AnkleGyro1", main="Intensity Subset Boxplots") 
+boxplot(AnkleGyro.2 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="AnkleGyro2", main="Intensity Subset Boxplots") 
+boxplot(AnkleGyro.3 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="AnkleGyro3", main="Intensity Subset Boxplots")
+
+#Magnet
+boxplot(HandMag.1 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="HandMag1", main="Intensity Subset Boxplots") 
+boxplot(HandMag.2 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="HandMag2", main="Intensity Subset Boxplots") 
+boxplot(HandMag.3 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="HandMag3", main="Intensity Subset Boxplots") 
+
+boxplot(ChestMag.1 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="ChestMag1", main="Intensity Subset Boxplots") 
+boxplot(ChestMag.2 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="ChestMag2", main="Intensity Subset Boxplots") 
+boxplot(ChestMag.3 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="ChestMag3", main="Intensity Subset Boxplots") 
+
+boxplot(AnkleMag.1 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="AnkleMag1", main="Intensity Subset Boxplots")
+boxplot(AnkleMag.2 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="AnkleMag2", main="Intensity Subset Boxplots")
+boxplot(AnkleMag.3 ~ HR.Median, data=Intensity, xlab="HR Category", ylab="AnkleMag3", main="Intensity Subset Boxplots")
+
+
+
+# Intensity Histograms
+hist(Intensity$Time)
+hist(Intensity$HR)
+
+#Temp
+hist(Intensity$HandTemp)
+hist(Intensity$ChestTemp)
+hist(Intensity$AnkleTemp)
+
+#Accel
+hist(Intensity$HandAccel16.1)
+hist(Intensity$HandAccel16.2)
+hist(Intensity$HandAccel16.3)
+
+hist(Intensity$ChestAccel16.1)
+hist(Intensity$ChestAccel16.2)
+hist(Intensity$ChestAccel16.3)
+
+hist(Intensity$AnkleAccel16.1)
+hist(Intensity$AnkleAccel16.2)
+hist(Intensity$AnkleAccel16.3)
+
+#Gyro
+hist(Intensity$HandGyro.1)
+hist(Intensity$HandGyro.2)
+hist(Intensity$HandGyro.3)
+
+hist(Intensity$ChestGyro.1)
+hist(Intensity$ChestGyro.2)
+hist(Intensity$ChestGyro.3)
+
+hist(Intensity$AnkleGyro.1)
+hist(Intensity$AnkleGyro.2)
+hist(Intensity$AnkleGyro.3)
+
+#Magnet
+hist(Intensity$HandMag.1)
+hist(Intensity$HandMag.2)
+hist(Intensity$HandMag.3)
+
+hist(Intensity$ChestMag.1)
+hist(Intensity$ChestMag.2)
+hist(Intensity$ChestMag.3)
+
+hist(Intensity$AnkleMag.1)
+hist(Intensity$AnkleMag.2)
+hist(Intensity$AnkleMag.3)
+
+
+
+
+# BOXPLOTS (LATTICE)
+
+boxplot(HR ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of HR by Activity")
+
+boxplot(HandTemp ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of Hand Temp by Activity")
+
+boxplot(HandAccel16.1 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of HA16-1 by Activity")
+
+boxplot(HandAccel16.2 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of HA16-2 by Activity")
+
+boxplot(HandAccel16.3 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of HA16-3 by Activity")
+
+boxplot(HandGyro.1 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of HandGyro1 by Activity")
+
+boxplot(HandGyro.2 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of HandGyro2 by Activity")
+
+boxplot(HandGyro.3 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of HandGyro3 by Activity")
+
+boxplot(HandMag.1 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of HandMag1 by Activity")
+
+boxplot(HandMag.2 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of HandMag2 by Activity")
+
+boxplot(HandMag.3 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of HandMag3 by Activity")
+
+boxplot(AnkleTemp ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of Ankle Temp by Activity")
+
+boxplot(AnkleAccel16.1 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of CA16-1 by Activity")
+
+boxplot(AnkleAccel16.2 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of CA16-2 by Activity")
+
+boxplot(AnkleAccel16.3 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of CA16-3 by Activity")
+
+boxplot(AnkleGyro.1 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleGyro1 by Activity")
+
+boxplot(AnkleGyro.2 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleGyro2 by Activity")
+
+boxplot(AnkleGyro.3 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleGyro3 by Activity")
+
+boxplot(AnkleMag.1 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleMag1 by Activity")
+
+boxplot(AnkleMag.2 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleMag2 by Activity")
+
+boxplot(AnkleMag.3 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleMag3 by Activity")
+
+boxplot(AnkleTemp ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of Ankle Temp by Activity")
+
+boxplot(AnkleAccel16.1 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleA16-1 by Activity")
+
+boxplot(AnkleAccel16.2 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleA16-2 by Activity")
+
+boxplot(AnkleAccel16.3 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleA16-3 by Activity")
+
+boxplot(AnkleGyro.1 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleGyro1 by Activity")
+
+boxplot(AnkleGyro.2 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleGyro2 by Activity")
+
+boxplot(AnkleGyro.3 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleGyro3 by Activity")
+
+boxplot(AnkleMag.1 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleMag1 by Activity")
+
+boxplot(AnkleMag.2 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleMag2 by Activity")
+
+boxplot(AnkleMag.3 ~ activityID, data=data, xlab = "Activity",
+        main = "Boxplot of AnkleMag3 by Activity")
+
+# HISTOGRAMS
+
+hist(HR,   xlab = "Heart Rate",   main = "Heart Rate Distribution")
+hist(HandTemp,   xlab = "HandTemp",   main = "HandTemp Distribution")
+hist(HandAccel16.1,   xlab = "HandAccel16.1",   main = "HandAccel16.1 Distribution")
+hist(HandAccel16.2,   xlab = "HandAccel16.2",   main = "HandAccel16.2 Distribution")
+hist(HandAccel16.3,   xlab = "HandAccel16.3",   main = "HandAccel16.3 Distribution")
+
+# VARIABLE MEANS BY ACTIVITY
+
+# HR Mean by ACTIVITY
+aggregate(data[, 3,2], list(activityID=data$activityID), mean) 
+
+# HandTemp Mean by ACTIVITY
+aggregate(data[, 4,2], list(activityID=data$activityID), mean) 
+
+# HandAccel16.1 Mean by CT
+aggregate(data[, 5,2], list(activityID=data$activityID), mean) 
+
+# HandAccel16.2 Mean by ACTIVITY
+aggregate(data[, 6,2], list(activityID=data$activityID), mean) 
+
+# HandAccel16.3 Mean by ACTIVITY
+aggregate(data[, 7,2], list(activityID=data$activityID), mean) 
+
+# HandGyro.1  Mean by ACTIVITY
+aggregate(data[, 8,2], list(activityID=data$activityID), mean) 
+
+# HandGyro.2  Mean by ACTIVITY
+aggregate(data[, 9,2], list(activityID=data$activityID), mean) 
+
+# HandGyro.3 Mean by ACTIVITY
+aggregate(data[, 10,2], list(activityID=data$activityID), mean) 
+
+# HandMag.1 Mean by ACTIVITY
+aggregate(data[, 11,2], list(activityID=data$activityID), mean)
+
+# HandMag.2 Mean by ACTIVITY
+aggregate(data[, 12,2], list(activityID=data$activityID), mean) 
+
+# HandMag.3 Mean by ACTIVITY
+aggregate(data[, 13,2], list(activityID=data$activityID), mean) 
+
+# ChestTemp Mean by ACTIVITY
+aggregate(data[, 14,2], list(activityID=data$activityID), mean) 
+
+# ChestAccel16.1 Mean by ACTIVITY
+aggregate(data[, 15,2], list(activityID=data$activityID), mean) 
+
+# ChestAccel16.2 Mean by ACTIVITY
+aggregate(data[, 16,2], list(activityID=data$activityID), mean) 
+
+# ChestAccel16.3 Mean by ACTIVITY
+aggregate(data[, 17,2], list(activityID=data$activityID), mean) 
+
+# ChestGyro.1 Mean by ACTIVITY
+aggregate(data[, 18,2], list(activityID=data$activityID), mean) 
+
+# ChestGyro.2 Mean by ACTIVITY
+aggregate(data[, 19,2], list(activityID=data$activityID), mean) 
+
+# ChestGyro.3 Mean by ACTIVITY
+aggregate(data[, 20,2], list(activityID=data$activityID), mean) 
+
+# ChestMag.1 Mean by ACTIVITY
+aggregate(data[, 21,2], list(activityID=data$activityID), mean) 
+
+# ChestMag.2 Mean by ACTIVITY
+aggregate(data[, 22,2], list(activityID=data$activityID), mean) 
+
+# ChestMag.3 Mean by ACTIVITY
+aggregate(data[, 23,2], list(activityID=data$activityID), mean) 
+
+# AnkleTemp Mean by ACTIVITY
+aggregate(data[, 24,2], list(activityID=data$activityID), mean) 
+
+# AnkleAccel.1 Mean by ACTIVITY
+aggregate(data[, 25,2], list(activityID=data$activityID), mean) 
+
+# AnkleAccel.2 Mean by ACTIVITY
+aggregate(data[, 26,2], list(activityID=data$activityID), mean) 
+
+# AnkleAccel.3 Mean by ACTIVITY
+aggregate(data[, 27,2], list(activityID=data$activityID), mean) 
+
+# AnkleGyro.1 Mean by ACTIVITY
+aggregate(data[, 28,2], list(activityID=data$activityID), mean) 
+
+# AnkleGyro.2 Mean by ACTIVITY
+aggregate(data[, 29,2], list(activityID=data$activityID), mean) 
+
+# AnkleGyro.3 Mean by ACTIVITY
+aggregate(data[, 30,2], list(activityID=data$activityID), mean) 
+
+# AnkleMag.1 Mean by ACTIVITY
+aggregate(data[, 31,2], list(activityID=data$activityID), mean) 
+
+# AnkleMag.2 Mean by ACTIVITY
+aggregate(data[, 32,2], list(activityID=data$activityID), mean) 
+
+# AnkleMag.3 Mean by ACTIVITY
+aggregate(data[, 33,2], list(activityID=data$activityID), mean) 
+
+
+
+
+
+
+# Correlation Matrix
+data_corr <- data[4:33]
+cor(data_corr, data_corr)
+
+
+# Lattice Plots
+
+# Dependent ~ HR
+# 1
+xyplot(HR ~ HandTemp | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "HandTemp",
+       ylab = "Heart Rate", 
+       main = "Plot of Hand Temp against Heart Rate
+       by Activity")
+
+xyplot(HR ~ HandAccel16.1 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "HandAccel16.1",
+       ylab = "Heart Rate", 
+       main = "Plot of HandAccel16.1 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ HandAccel16.2 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "HandAccel16.2",
+       ylab = "Heart Rate", 
+       main = "Plot of HandAccel16.2 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ HandAccel16.3 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "HandAccel16.3",
+       ylab = "Heart Rate", 
+       main = "Plot of HandAccel16.3 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ HandGyro.1 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "HandGyro.1",
+       ylab = "Heart Rate", 
+       main = "Plot of HandGyro.1 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ HandGyro.2 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "HandGyro.2",
+       ylab = "Heart Rate", 
+       main = "Plot of HandGyro.2 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ HandGyro.3 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "HandGyro.3",
+       ylab = "Heart Rate", 
+       main = "Plot of HandGyro.3 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ HandMag.1 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "HandMag.1",
+       ylab = "Heart Rate", 
+       main = "Plot of HandMag.1 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ HandMag.2 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "HandMag.2",
+       ylab = "Heart Rate", 
+       main = "Plot of HandMag.2 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ HandMag.3 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "HandMag.3",
+       ylab = "Heart Rate", 
+       main = "Plot of HandMag.3 against Heart Rate
+       by Activity")
+
+# CHEST
+
+xyplot(HR ~ ChestTemp | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "ChestTemp",
+       ylab = "Heart Rate", 
+       main = "Plot of Chest Temp against Heart Rate
+       by Activity")
+
+xyplot(HR ~ ChestAccel16.1 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "ChestAccel16.1",
+       ylab = "Heart Rate", 
+       main = "Plot of ChestAccel16.1 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ ChestAccel16.2 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "ChestAccel16.2",
+       ylab = "Heart Rate", 
+       main = "Plot of ChestAccel16.2 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ ChestAccel16.3 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "ChestAccel16.3",
+       ylab = "Heart Rate", 
+       main = "Plot of ChestAccel16.3 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ ChestGyro.1 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "ChestGyro.1",
+       ylab = "Heart Rate", 
+       main = "Plot of ChestGyro.1 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ ChestGyro.2 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "ChestGyro.2",
+       ylab = "Heart Rate", 
+       main = "Plot of ChestGyro.2 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ ChestGyro.3 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "ChestGyro.3",
+       ylab = "Heart Rate", 
+       main = "Plot of ChestGyro.3 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ ChestMag.1 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "ChestMag.1",
+       ylab = "Heart Rate", 
+       main = "Plot of ChestMag.1 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ ChestMag.2 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "ChestMag.2",
+       ylab = "Heart Rate", 
+       main = "Plot of ChestMag.2 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ ChestMag.3 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "ChestMag.3",
+       ylab = "Heart Rate", 
+       main = "Plot of ChestMag.3 against Heart Rate
+       by Activity")
+
+# ANKLE
+
+xyplot(HR ~ AnkleTemp | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "AnkleTemp",
+       ylab = "Heart Rate", 
+       main = "Plot of Ankle Temp against Heart Rate
+       by Activity")
+
+xyplot(HR ~ AnkleAccel16.1 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "AnkleAccel16.1",
+       ylab = "Heart Rate", 
+       main = "Plot of AnkleAccel16.1 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ AnkleAccel16.2 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "AnkleAccel16.2",
+       ylab = "Heart Rate", 
+       main = "Plot of AnkleAccel16.2 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ AnkleAccel16.3 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "AnkleAccel16.3",
+       ylab = "Heart Rate", 
+       main = "Plot of AnkleAccel16.3 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ AnkleGyro.1 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "AnkleGyro.1",
+       ylab = "Heart Rate", 
+       main = "Plot of AnkleGyro.1 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ AnkleGyro.2 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "AnkleGyro.2",
+       ylab = "Heart Rate", 
+       main = "Plot of AnkleGyro.2 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ AnkleGyro.3 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "AnkleGyro.3",
+       ylab = "Heart Rate", 
+       main = "Plot of AnkleGyro.3 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ AnkleMag.1 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "AnkleMag.1",
+       ylab = "Heart Rate", 
+       main = "Plot of AnkleMag.1 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ AnkleMag.2 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "AnkleMag.2",
+       ylab = "Heart Rate", 
+       main = "Plot of AnkleMag.2 against Heart Rate
+       by Activity")
+
+xyplot(HR ~ AnkleMag.3 | activityID,
+       data=data, as.table = TRUE, pch = 50,
+       panel = function(x,y,...){
+         panel.xyplot(x,y,...)
+         fit <- lm(y ~ x)
+         panel.abline(fit)
+       }, 
+       xlab = "AnkleMag.3",
+       ylab = "Heart Rate", 
+       main = "Plot of AnkleMag.3 against Heart Rate
+       by Activity")
+
+
+
+
+
+
+# Randomize observations and split into train/test groups
+
+sample_size <- floor(.70* nrow(data))
+set.seed(498)
+int <- sample(seq_len(nrow(data)),size=sample_size)
+train   <- data[int,]
+test    <- data[-int,]
+
+
+
+
+
+
+# EDA TREE WITH RANDOMIZED DATA
+
+# Shuffle the dataset
+set.seed(1234)
+g <- runif(nrow(data))
+dataR <- data[order(g),]
+
+sample_size <- floor(.70* nrow(dataR))
+set.seed(498)
+int <- sample(seq_len(nrow(data)),size=sample_size)
+trainR   <- data[int,]
+testR    <- data[-int,]
+
+# Clean Up
+rm(sample_size)
+rm(dataR)
+rm(g)
+
+length(trainR)
+length(trainR$activityID)
+dim(trainR)
+names(trainR)
+
+# All variables considered
+PAM.rpart <- rpart(activityID ~ trainR[,3:33], 
+                   data = trainR, 
+                   method = "class")
+
+plotcp(PAM.rpart)
+printcp(PAM.rpart)
+
+PAM.rpart2 <- prune(PAM.rpart, cp = 0.013)
+plot(PAM.rpart2, uniform = TRUE, margin = .2)
+text(PAM.rpart2, use.n = TRUE, cex = 0.75)
+
+prp(PAM.rpart2, extra=1, uniform=F, type=3)
+
+
+
+#-------------------------------------------------------/
+# LINEAR REGRESSION
+#-------------------------------------------------------/
+
+library(MASS)
+
+# Working Models
+
+fit <- lm(HR~.-c(Subject+Time+HR.Median), 
+          data=trainR)
+
+fit$coefficients
+
+# Forward Selection
+forwardfit<- stepAIC(fit, direction="forward")
+summary(forwardfit) # show results
+
+# Backward Selection
+backfit<- stepAIC(fit, direction="backward")
+summary(backfit) # show results
+
+# Stepwise Selection
+stepfit<- stepAIC(fit, direction="both")
+summary(stepfit) # show results
+
+
+#-------------------------------------------------------/
+#                     RANDOM FOREST
+#-------------------------------------------------------/
+
+# Using randomized train sample
+# Strip out SubjectID
+library(pROC)
+
+rf.forest =randomForest(as.factor(activityID)~.-(Subject+HR.Median),
+                        data=trainR,
+                        mtry=10, 
+                        importance =TRUE, 
+                        type="classification")
+
+# IN-SAMPLE STATISTICS
+# Accuracy: 99.94%
+rf.train.cm <- rf.forest$confusion
+sum(diag(rf.train.cm))/sum(rf.train.cm)
+
+# VARIABLE IMPORTANCE
+varImpPlot(rf.forest, sort=TRUE, n.var=min(30, nrow(rf.forest$importance)),
+           type=NULL, class=NULL, scale=TRUE, 
+           main=deparse(substitute(x)))
+
+rf.forest$importance
+RF.Imp <- rf.forest$importance
+
+write.csv(RF.Imp, file = "RF.Imp.csv",row.names=TRUE)
+
+# OUT-OF-SAMPLE EVALUATION 
+# Accuracy: 99.94%
+
+yhat.rf.forest <- predict(rf.forest,newdata=testR)
+
+rfconfusion <- table(yhat.rf.forest,testR$activityID)
+
+sum(diag(rfconfusion))/sum(rfconfusion)
+summary(yhat.rf.forest)
+
+
+# --------------------- REVERSE MODELS
+reverse.forest =randomForest(as.factor(activityID)~.-(Subject+HR.Median),
+                             data=testR,
+                             mtry=10, 
+                             importance =TRUE, 
+                             type="classification")
+
+# IN-SAMPLE STATISTICS
+# Accuracy: 99.84%
+reverse.train.cm <- reverse.forest$confusion
+sum(diag(reverse.train.cm))/sum(reverse.train.cm)
+
+# VARIABLE IMPORTANCE
+varImpPlot(reverse.forest, sort=TRUE, n.var=min(30, nrow(reverse.forest$importance)),
+           type=NULL, class=NULL, scale=TRUE, 
+           main=deparse(substitute(x)))
+
+reverse.forest$importance
+
+# OUT-OF-SAMPLE EVALUATION 
+# Accuracy: 99.84%
+
+yhat.reverse.forest <- predict(reverse.forest,newdata=trainR)
+
+reverse.confusion <- table(yhat.reverse.forest,trainR$activityID)
+
+sum(diag(reverse.confusion))/sum(reverse.confusion)
+summary(yhat.reverse.forest)
+
+
+# --------------------- 
+# SENSOR-SPECIFIC MODELS
+# --------------------- 
+# HAND SENSOR
+Hand.forest =randomForest(as.factor(activityID)~HandTemp+
+                            HandAccel16.1+
+                            HandAccel16.2+
+                            HandAccel16.3+
+                            HandGyro.1+
+                            HandGyro.2+
+                            HandGyro.3+
+                            HandMag.1+
+                            HandMag.2+
+                            HandMag.3,
+                          data=trainR,
+                          mtry=10, 
+                          importance =TRUE, 
+                          type="classification")
+# IN-SAMPLE STATISTICS
+# Accuracy: 92.99%
+Hand.train.cm <- Hand.forest$confusion
+sum(diag(Hand.train.cm))/sum(Hand.train.cm)
+
+# VARIABLE IMPORTANCE
+varImpPlot(Hand.forest, sort=TRUE, n.var=min(30, nrow(Hand.forest$importance)),
+           type=NULL, class=NULL, scale=TRUE, 
+           main=deparse(substitute(x)))
+
+Hand.RF.Imp <- Hand.forest$importance
+write.csv(Hand.RF.Imp, file = "Hand.RF.Imp.csv",row.names=TRUE)
+
+# OUT-OF-SAMPLE EVALUATION 
+# Accuracy: 93.02%
+
+yhat.Hand.RF <- predict(Hand.forest,newdata=testR)
+
+rf.Hand.confusion <- table(yhat.Hand.RF,testR$activityID)
+
+sum(diag(rf.Hand.confusion))/sum(rf.Hand.confusion)
+summary(yhat.Hand.RF)
+
+
+
+
+
+#-------------------------------------------------------/
+
+# Chest SENSOR
+Chest.forest =randomForest(as.factor(activityID)~ChestTemp+
+                             ChestAccel16.1+
+                             ChestAccel16.2+
+                             ChestAccel16.3+
+                             ChestGyro.1+
+                             ChestGyro.2+
+                             ChestGyro.3+
+                             ChestMag.1+
+                             ChestMag.2+
+                             ChestMag.3,
+                           data=trainR,
+                           mtry=10, 
+                           importance =TRUE, 
+                           type="classification")
+# IN-SAMPLE STATISTICS
+# Accuracy: 93.69%
+Chest.train.cm <- Chest.forest$confusion
+sum(diag(Chest.train.cm))/sum(Chest.train.cm)
+
+# VARIABLE IMPORTANCE
+varImpPlot(Chest.forest, sort=TRUE, n.var=min(30, nrow(Chest.forest$importance)),
+           type=NULL, class=NULL, scale=TRUE, 
+           main=deparse(substitute(x)))
+
+Chest.RF.Imp <- Chest.forest$importance
+write.csv(Chest.RF.Imp, file = "Chest.RF.Imp.csv",row.names=TRUE)
+
+# OUT-OF-SAMPLE EVALUATION 
+# Accuracy: 93.72%
+
+yhat.Chest.RF <- predict(Chest.forest,newdata=testR)
+
+rf.Chest.confusion <- table(yhat.Chest.RF,testR$activityID)
+
+sum(diag(rf.Chest.confusion))/sum(rf.Chest.confusion)
+summary(yhat.Chest.RF)
+
+
+
+
+#-------------------------------------------------------/
+
+# ANKLE SENSOR
+Ankle.forest =randomForest(as.factor(activityID)~AnkleTemp+
+                             AnkleAccel16.1+
+                             AnkleAccel16.2+
+                             AnkleAccel16.3+
+                             AnkleGyro.1+
+                             AnkleGyro.2+
+                             AnkleGyro.3+
+                             AnkleMag.1+
+                             AnkleMag.2+
+                             AnkleMag.3,
+                           data=trainR,
+                           mtry=10, 
+                           importance =TRUE, 
+                           type="classification")
+# IN-SAMPLE STATISTICS
+# Accuracy: 92.52%
+Ankle.train.cm <- Ankle.forest$confusion
+sum(diag(Ankle.train.cm))/sum(Ankle.train.cm)
+
+# VARIABLE IMPORTANCE
+varImpPlot(Ankle.forest, sort=TRUE, n.var=min(30, nrow(Ankle.forest$importance)),
+           type=NULL, class=NULL, scale=TRUE, 
+           main=deparse(substitute(x)))
+
+Ankle.RF.Imp <- Ankle.forest$importance
+write.csv(Ankle.RF.Imp, file = "Ankle.RF.Imp.csv",row.names=TRUE)
+
+# OUT-OF-SAMPLE EVALUATION 
+# Accuracy: 92.60%
+
+yhat.Ankle.RF <- predict(Ankle.forest,newdata=testR)
+
+rf.Ankle.confusion <- table(yhat.Ankle.RF,testR$activityID)
+
+sum(diag(rf.Ankle.confusion))/sum(rf.Ankle.confusion)
+summary(yhat.Ankle.RF)
+
+
+#-------------------------------------------------------/
+# VARIABLE SUBSET RANDOM FOREST MODELS
+#-------------------------------------------------------/
+
+# HAND
+# Eliminated bottom 5 variables for
+# MeanDecrease GINI and ACCURACY
+# Vars left: HandTemp, HandMag.2, HandAccel16.1, 
+# HandMag.1, and HandAccel16.3
+
+# HAND SENSOR with top 5 VARS
+Hand.sub.forest =randomForest(as.factor(activityID)~HandTemp+
+                                HandAccel16.1+
+                                HandAccel16.3+
+                                HandMag.1+
+                                HandMag.2,
+                              data=trainR, 
+                              importance =TRUE, 
+                              type="classification")
+# IN-SAMPLE STATISTICS
+# Accuracy: 89.89%
+Hand.sub.train.cm <- Hand.sub.forest$confusion
+sum(diag(Hand.sub.train.cm))/sum(Hand.sub.train.cm)
+
+# VARIABLE IMPORTANCE
+varImpPlot(Hand.sub.forest, sort=TRUE, n.var=min(30, nrow(Hand.forest$importance)),
+           type=NULL, class=NULL, scale=TRUE, 
+           main=deparse(substitute(x)))
+
+# OUT-OF-SAMPLE EVALUATION 
+# Accuracy: 89.69%
+
+yhat.Hand.sub.RF <- predict(Hand.sub.forest,newdata=testR)
+
+rf.Hand.sub.confusion <- table(yhat.Hand.sub.RF,testR$activityID)
+
+sum(diag(rf.Hand.sub.confusion))/sum(rf.Hand.sub.confusion)
+summary(yhat.Hand.sub.RF)
+
+# ------------------------------*
+
+# CHEST
+# Eliminated bottom 5 variables for
+# MeanDecrease GINI and ACCURACY
+
+
+# CHEST SENSOR with top 5 VARS
+Chest.sub.forest =randomForest(as.factor(activityID)~ChestTemp+
+                                 ChestAccel16.2+
+                                 ChestAccel16.3+
+                                 ChestMag.2+
+                                 ChestMag.3,
+                               data=trainR,
+                               importance =TRUE, 
+                               type="classification")
+# IN-SAMPLE STATISTICS
+# Accuracy: 91.30%
+Chest.sub.train.cm <- Chest.sub.forest$confusion
+sum(diag(Chest.sub.train.cm))/sum(Chest.sub.train.cm)
+
+# VARIABLE IMPORTANCE
+varImpPlot(Chest.forest, sort=TRUE, n.var=min(30, nrow(Chest.forest$importance)),
+           type=NULL, class=NULL, scale=TRUE, 
+           main=deparse(substitute(x)))
+
+# OUT-OF-SAMPLE EVALUATION 
+# Accuracy: 91.40%
+
+yhat.Chest.sub.RF <- predict(Chest.sub.forest,newdata=testR)
+
+rf.Chest.sub.confusion <- table(yhat.Chest.sub.RF,testR$activityID)
+
+sum(diag(rf.Chest.sub.confusion))/sum(rf.Chest.sub.confusion)
+summary(yhat.Chest.sub.RF)
+
+# -------------------------------------------------*
+# ANKLE
+# Eliminated bottom 5 variables for
+# MeanDecrease GINI and ACCURACY
+# Vars left: HandTemp, HandMag.2, HandAccel16.1, 
+# HandMag.1, and HandAccel16.3
+
+# ANKLE SENSOR with top 5 VARS
+Ankle.sub.forest =randomForest(as.factor(activityID)~AnkleTemp+
+                                 AnkleMag.1+
+                                 AnkleAccel16.1+
+                                 AnkleMag.2+
+                                 AnkleMag.3,
+                               data=trainR,
+                               importance =TRUE, 
+                               type="classification")
+# IN-SAMPLE STATISTICS
+# Accuracy: 89.00%
+Ankle.sub.train.cm <- Ankle.sub.forest$confusion
+sum(diag(Ankle.sub.train.cm))/sum(Ankle.sub.train.cm)
+
+# VARIABLE IMPORTANCE
+varImpPlot(Ankle.forest, sort=TRUE, n.var=min(30, nrow(Ankle.forest$importance)),
+           type=NULL, class=NULL, scale=TRUE, 
+           main=deparse(substitute(x)))
+
+# OUT-OF-SAMPLE EVALUATION 
+# Accuracy: 89.16%
+
+yhat.Ankle.sub.RF <- predict(Ankle.sub.forest,newdata=testR)
+
+rf.Ankle.sub.confusion <- table(yhat.Ankle.sub.RF,testR$activityID)
+
+sum(diag(rf.Ankle.sub.confusion))/sum(rf.Ankle.sub.confusion)
+summary(yhat.Ankle.sub.RF)
+
+
+### CLUSTER
+
+# Look at stuff from Marketing to cluster by activity
+# Run models based on activity clusters
+
+
+#--------------------------------------------------------------*
+#                             KNN
+#--------------------------------------------------------------*
+
+library(class)
+
+cluster <- knn(trainR, testR, trainR$activityID, k = 1, l = 0, prob = FALSE, use.all = TRUE)
+
+cluster
+
+
+
+#--------------------------------------------------------------*
+#                             SVM
+#--------------------------------------------------------------*
+
+# Sample down trainR set to 20%
+sub20.trainR <- trainR[sample(nrow(trainR), .2*(nrow(trainR))), ]
+
+
+# TUNE SVM
+tune.out=tune(svm,as.factor(activityID) ~ . -Subject, data=sub20.trainR,
+              kernel = "linear",
+              ranges=list(cost=c(0.001, 0.01, 0.1, 1,5,10,100),
+                          gamma=c(0.1,0.5,1,2,3,4,5,10)))
+
+tune.out
+# FIT MODEL
+svmfit = svm(as.factor(activityID) ~ . -Subject,
+             data=sub20.trainR, 
+             kernel = "linear", gamma=0.1, cost=10)
+
+svmpred = predict(svmfit,testR)
+
+mean(svmpred == testR$activityID)
+#94.24% Accuracy
+
+
+# LOGIT MODELS
+
+#******************************************************************************
+  # Daily Sample 70/30
+  
+  sample_sizeDaily <- floor(.70* nrow(Daily))
+set.seed(498)
+intDaily <- sample(seq_len(nrow(Daily)),size=sample_sizeDaily)
+trainDaily   <- Daily[intDaily,]
+testDaily    <- Daily[-intDaily,]
+
+# EDA TREE WITH RANDOMIZED DATA
+
+#Shuffle the dataset
+set.seed(1234)
+gDaily <- runif(nrow(Daily))
+dataRDaily <- Daily[order(gDaily),]
+
+sample_sizeDaily <- floor(.70* nrow(dataRDaily))
+set.seed(498)
+intDaily <- sample(seq_len(nrow(Daily)),size=sample_sizeDaily)
+trainDaily   <- Daily[intDaily,]
+testDaily    <- Daily[-intDaily,]
+
+# Model Base
+PAMlogitDaily <- glm(HR.Median ~ .-HR-activityID-Subject, data=trainDaily, family="binomial")
+summary(PAMlogitDaily)
+# AIC 4922.4
+BIC(PAMlogitDaily)
+# BIC 5194.34
+
+varImp(PAMlogitDaily)
+pR2(PAMlogitDaily) #McFadden .479
+
+
+# Model 1
+PAMlogitDaily1 <- glm(HR.Median ~ .-HR-Subject-activityID-HandGyro.1-HandGyro.2-HandGyro.3-HandMag.2-ChestAccel16.1
+                      -ChestGyro.1-ChestGyro.3-ChestMag.3-AnkleAccel16.1-AnkleGyro.1-AnkleGyro.2-AnkleGyro.3-AnkleMag.2, 
+                      data=trainRDaily, family="binomial")
+summary(PAMlogitDaily1)
+# AIC 5211.2
+BIC(PAMlogitDaily1)
+# BIC 5372.68
+
+varImp(PAMlogitDaily1)
+pR2(PAMlogitDaily1) #McFadden .445
+
+
+# Model 2
+PAMlogitDaily2 <- glm(HR.Median ~ .-HR-Subject-activityID-HandGyro.1-HandGyro.2-HandGyro.3-HandMag.2-ChestAccel16.1
+                      -ChestGyro.1-ChestGyro.3-ChestMag.3-AnkleAccel16.1-AnkleGyro.1-AnkleGyro.2-AnkleGyro.3-AnkleMag.2-HandAccel16.2-
+                        HandAccel16.3-ChestAccel16.3-ChestMag.1, data=trainRDaily, family="binomial")
+summary(PAMlogitDaily2)
+# AIC 5276.4
+BIC(PAMlogitDaily2)
+# BIC 5403.86
+
+varImp(PAMlogitDaily2)
+pR2(PAMlogitDaily2) #McFadden .438
+
+
+# Model 3
+PAMlogitDaily3 <- glm(HR.Median ~ .-HR-Subject-activityID-Time, data=trainDaily, family="binomial")
+summary(PAMlogitDaily3)
+# AIC 5349.6
+BIC(PAMlogitDaily3)
+# BIC 5613.04
+
+varImp(PAMlogitDaily3)
+pR2(PAMlogitDaily3) #McFadden .433
+
+
+# Model 4
+PAMlogitDaily4 <- glm(HR.Median ~ .-HR-Subject-activityID-Time-HandGyro.1-HandGyro.2-HandGyro.3-HandMag.2-ChestGyro.1
+                      -ChestGyro.3-ChestMag.2-ChestMag.3-AnkleGyro.1-AnkleGyro.2-AnkleGyro.3-AnkleMag.2-HandAccel16.2-HandMag.3-
+                        HandAccel16.3-ChestAccel16.3-ChestMag.1, data=trainRDaily, family="binomial")
+summary(PAMlogitDaily4)
+# AIC 5395
+BIC(PAMlogitDaily4)
+# BIC 5513.92
+
+varImp(PAMlogitDaily4)
+pR2(PAMlogitDaily4) #McFadden .425
+
+
+
+
+anova(PAMlogitDaily, PAMlogitDaily1, PAMlogitDaily2, PAMlogitDaily3, PAMlogitDaily4, test = "Chisq")
+lrtest(PAMlogitDaily1, PAMlogitDaily3)
+
+
+
+predDaily <- predict(PAMlogitDaily, newdata=testDaily, type="response")
+accuracy <- table(predDaily, testDaily[,"HR.Median"])
+sum(diag(accuracy))/sum(accuracy)
+# 0.07664045
+table(testDaily$HR.Median, predDaily > .5)
+
+#    FALSE  TRUE
+#  0 14988    60
+#  1   372    94
+
+predDailyTrain <- predict(PAMlogitDaily, type="response")
+table(trainDaily$HR.Median, predDailyTrain > .5)
+
+#    FALSE  TRUE
+#  0 35025   148
+#  1   742   283
+
+
+# Calculate Odds Ratios
+exp(coef(PAMlogitDaily))
+
+# ROC
+a <- roc(HR.Median ~ predDaily, data = testDaily)
+plot(a, col="blue", main="Daily")
+
+# Create Lift Chart
+plotLift(predDaily, testDaily[,"HR.Median"], cumulative=TRUE, n.buckets=100, main="Daily Lift")
+gains(testDaily[,"HR.Median"], predDaily, groups=10, optimal=TRUE, percents=TRUE)
+
+#**********************************************************************************************
+  
+  
+  # Intensity Sample 70/30
+  
+  sample_sizeIntensity <- floor(.70* nrow(Intensity))
+set.seed(498)
+intIntensity <- sample(seq_len(nrow(Intensity)),size=sample_sizeIntensity)
+trainIntensity   <- Intensity[intIntensity,]
+testIntensity    <- Intensity[-intIntensity,]
+
+# EDA TREE WITH RANDOMIZED DATA
+
+#Shuffle the dataset
+set.seed(1234)
+gIntensity <- runif(nrow(Intensity))
+dataRIntensity <- Intensity[order(gIntensity),]
+
+sample_sizeIntensity <- floor(.70* nrow(dataRIntensity))
+set.seed(498)
+intIntensity <- sample(seq_len(nrow(Intensity)),size=sample_sizeIntensity)
+trainRIntensity   <- Intensity[intIntensity,]
+testRIntensity    <- Intensity[-intIntensity,]
+
+
+
+# Model Base
+PAMlogitIntensity <- glm(HR.Median ~ .-HR-Subject-activityID, data=trainIntensity, family="binomial")
+summary(PAMlogitIntensity)
+#AIC 10937
+BIC(PAMlogitIntensity)
+# 11211.48
+
+varImp(PAMlogitIntensity)
+pR2(PAMlogitIntensity) #McFadden .206
+
+
+# Model 1
+PAMlogitIntensity1 <- glm(HR.Median ~ ChestTemp+Time+ChestMag.1+AnkleTemp, data=trainRIntensity, family="binomial")
+summary(PAMlogitIntensity1)
+#AIC 11380
+BIC(PAMlogitIntensity1)
+# 11422.8
+
+varImp(PAMlogitIntensity1)
+pR2(PAMlogitIntensity1) #McFadden .170
+
+
+# Model 2
+PAMlogitIntensity2 <- glm(HR.Median ~ .-HR-Subject-activityID-HandGyro.1-HandGyro.2-HandGyro.3-HandMag.3-ChestAccel16.1
+                          -ChestGyro.1-ChestGyro.2-ChestGyro.3-ChestMag.2-ChestMag.3-AnkleAccel16.1-AnkleAccel16.2-AnkleAccel16.3-AnkleGyro.1-AnkleGyro.2-AnkleGyro.3
+                          , data=trainRIntensity, family="binomial")
+summary(PAMlogitIntensity2)
+#AIC 10948
+BIC(PAMlogitIntensity2)
+# 11084.7
+
+varImp(PAMlogitIntensity2)
+pR2(PAMlogitIntensity2) #McFadden .203
+
+
+
+# Model 3
+PAMlogitIntensity3 <- glm(HR.Median ~ .-HR-Subject-activityID-HandGyro.1-HandGyro.2-HandGyro.3-HandMag.3-ChestGyro.1
+                          -ChestGyro.3-ChestMag.2-ChestMag.3-AnkleAccel16.1-AnkleAccel16.2-AnkleAccel16.3-AnkleGyro.1-AnkleGyro.2-AnkleGyro.3
+                          , data=trainRIntensity, family="binomial")
+summary(PAMlogitIntensity3)
+#AIC 10929
+BIC(PAMlogitIntensity3)
+# 11082.88
+
+varImp(PAMlogitIntensity3)
+pR2(PAMlogitIntensity3) #McFadden .204
+
+
+
+# Model 4
+PAMlogitIntensity4 <- glm(HR.Median ~ .-HR-Subject-activityID-HandGyro.1-HandGyro.2-HandGyro.3-HandMag.3
+                          -ChestGyro.3-ChestMag.2-ChestMag.3-AnkleAccel16.1-AnkleAccel16.2-AnkleAccel16.3-AnkleGyro.1-AnkleGyro.2
+                          , data=trainRIntensity, family="binomial")
+summary(PAMlogitIntensity4)
+#AIC 10920
+BIC(PAMlogitIntensity4)
+# 11090.89
+
+varImp(PAMlogitIntensity4)
+pR2(PAMlogitIntensity4) #McFadden .205
+
+
+
+predIntensity <- predict(PAMlogitIntensity4, newdata=testIntensity, type="response")
+accuracy <- table(predIntensity, testIntensity[,"HR.Median"])
+sum(diag(accuracy))/sum(accuracy)
+# 0.0001201
+table(testIntensity$HR.Median, predIntensity > .5)
+
+#    FALSE  TRUE
+#  0    20   721
+#  1    18 15895
+
+predIntensityTrain <- predict(PAMlogitIntensity4, type="response")
+table(trainIntensity$HR.Median, predIntensityTrain > .5)
+
+#    FALSE  TRUE
+#  0    31  1625
+#  1    19 37183
+
+
+# Calculate Odds Ratios
+exp(coef(PAMlogitIntensity4))
+
+
+# ROC
+b <- roc(HR.Median ~ predIntensity, data = testIntensity)
+plot(b, col="red", main="Intensity")
+
+# Create Lift Chart
+plotLift(predIntensity, testIntensity[,"HR.Median"], cumulative=TRUE, n.buckets=100, main="Intensity Lift")
+gains(testIntensity[,"HR.Median"], predIntensity, groups=10, optimal=TRUE, percents=TRUE)
+
+#*****************************************************************************************
+  
+  # Chores Boxplots
+  boxplot(Time ~ HR.Median, data=Chores, xlab="HR Category", ylab="Time", main="Chores Subset Boxplots")
+
+#Temp
+boxplot(HandTemp ~ HR.Median, data=Chores, xlab="HR Category", ylab="Hand Temperature", main="Chores Subset Boxplots")
+boxplot(ChestTemp ~ HR.Median, data=Chores, xlab="HR Category", ylab="Chest Temperature", main="Chores Subset Boxplots")
+boxplot(AnkleTemp ~ HR.Median, data=Chores, xlab="HR Category", ylab="Ankle Temperature", main="Chores Subset Boxplots")
+
+#Accel
+boxplot(HandAccel16.1 ~ HR.Median, data=Chores, xlab="HR Category", ylab="HandAccel16.1", main="Chores Subset Boxplots") 
+boxplot(HandAccel16.2 ~ HR.Median, data=Chores, xlab="HR Category", ylab="HandAccel16.2", main="Chores Subset Boxplots") 
+boxplot(HandAccel16.3 ~ HR.Median, data=Chores, xlab="HR Category", ylab="HandAccel16.3", main="Chores Subset Boxplots") 
+
+boxplot(ChestAccel16.1 ~ HR.Median, data=Chores, xlab="HR Category", ylab="ChestAccel16.1", main="Chores Subset Boxplots") 
+boxplot(ChestAccel16.2 ~ HR.Median, data=Chores, xlab="HR Category", ylab="ChestAccel16.2", main="Chores Subset Boxplots") 
+boxplot(ChestAccel16.3 ~ HR.Median, data=Chores, xlab="HR Category", ylab="ChestAccel16.3", main="Chores Subset Boxplots") 
+
+boxplot(AnkleAccel16.1 ~ HR.Median, data=Chores, xlab="HR Category", ylab="AnkleAccel16.1", main="Chores Subset Boxplots") 
+boxplot(AnkleAccel16.2 ~ HR.Median, data=Chores, xlab="HR Category", ylab="AnkleAccel16.2", main="Chores Subset Boxplots") 
+boxplot(AnkleAccel16.3 ~ HR.Median, data=Chores, xlab="HR Category", ylab="AnkleAccel16.3", main="Chores Subset Boxplots")
+
+#Gyro
+boxplot(HandGyro.1 ~ HR.Median, data=Chores, xlab="HR Category", ylab="HandGyro1", main="Chores Subset Boxplots") 
+boxplot(HandGyro.2 ~ HR.Median, data=Chores, xlab="HR Category", ylab="HandGyro2", main="Chores Subset Boxplots") 
+boxplot(HandGyro.3 ~ HR.Median, data=Chores, xlab="HR Category", ylab="HandGyro3", main="Chores Subset Boxplots") 
+
+boxplot(ChestGyro.1 ~ HR.Median, data=Chores, xlab="HR Category", ylab="ChestGyro1", main="Chores Subset Boxplots") 
+boxplot(ChestGyro.2 ~ HR.Median, data=Chores, xlab="HR Category", ylab="ChestGyro2", main="Chores Subset Boxplots")
+boxplot(ChestGyro.3 ~ HR.Median, data=Chores, xlab="HR Category", ylab="ChestGyro3", main="Chores Subset Boxplots") 
+
+boxplot(AnkleGyro.1 ~ HR.Median, data=Chores, xlab="HR Category", ylab="AnkleGyro1", main="Chores Subset Boxplots") 
+boxplot(AnkleGyro.2 ~ HR.Median, data=Chores, xlab="HR Category", ylab="AnkleGyro2", main="Chores Subset Boxplots") 
+boxplot(AnkleGyro.3 ~ HR.Median, data=Chores, xlab="HR Category", ylab="AnkleGyro3", main="Chores Subset Boxplots")
+
+#Magnet
+boxplot(HandMag.1 ~ HR.Median, data=Chores, xlab="HR Category", ylab="HandMag1", main="Chores Subset Boxplots") 
+boxplot(HandMag.2 ~ HR.Median, data=Chores, xlab="HR Category", ylab="HandMag2", main="Chores Subset Boxplots") 
+boxplot(HandMag.3 ~ HR.Median, data=Chores, xlab="HR Category", ylab="HandMag3", main="Chores Subset Boxplots") 
+
+boxplot(ChestMag.1 ~ HR.Median, data=Chores, xlab="HR Category", ylab="ChestMag1", main="Chores Subset Boxplots") 
+boxplot(ChestMag.2 ~ HR.Median, data=Chores, xlab="HR Category", ylab="ChestMag2", main="Chores Subset Boxplots") 
+boxplot(ChestMag.3 ~ HR.Median, data=Chores, xlab="HR Category", ylab="ChestMag3", main="Chores Subset Boxplots") 
+
+boxplot(AnkleMag.1 ~ HR.Median, data=Chores, xlab="HR Category", ylab="AnkleMag1", main="Chores Subset Boxplots")
+boxplot(AnkleMag.2 ~ HR.Median, data=Chores, xlab="HR Category", ylab="AnkleMag2", main="Chores Subset Boxplots")
+boxplot(AnkleMag.3 ~ HR.Median, data=Chores, xlab="HR Category", ylab="AnkleMag3", main="Chores Subset Boxplots")
+
+
+# Chores Histograms
+hist(Chores$Time)
+hist(Chores$HR)
+
+#Temp
+hist(Chores$HandTemp)
+hist(Chores$ChestTemp)
+hist(Chores$AnkleTemp)
+
+#Accel
+hist(Chores$HandAccel16.1)
+hist(Chores$HandAccel16.2)
+hist(Chores$HandAccel16.3)
+
+hist(Chores$ChestAccel16.1)
+hist(Chores$ChestAccel16.2)
+hist(Chores$ChestAccel16.3)
+
+hist(Chores$AnkleAccel16.1)
+hist(Chores$AnkleAccel16.2)
+hist(Chores$AnkleAccel16.3)
+
+#Gyro
+hist(Chores$HandGyro.1)
+hist(Chores$HandGyro.2)
+hist(Chores$HandGyro.3)
+
+hist(Chores$ChestGyro.1)
+hist(Chores$ChestGyro.2)
+hist(Chores$ChestGyro.3)
+
+hist(Chores$AnkleGyro.1)
+hist(Chores$AnkleGyro.2)
+hist(Chores$AnkleGyro.3)
+
+#Magnet
+hist(Chores$HandMag.1)
+hist(Chores$HandMag.2)
+hist(Chores$HandMag.3)
+
+hist(Chores$ChestMag.1)
+hist(Chores$ChestMag.2)
+hist(Chores$ChestMag.3)
+
+hist(Chores$AnkleMag.1)
+hist(Chores$AnkleMag.2)
+hist(Chores$AnkleMag.3)
+
+
+
+# Chores Sample 70/30
+
+sample_sizeChores <- floor(.70* nrow(Chores))
+set.seed(498)
+intChores <- sample(seq_len(nrow(Chores)),size=sample_sizeChores)
+trainChores   <- Chores[intChores,]
+testChores    <- Chores[-intChores,]
+
+# EDA TREE WITH RANDOMIZED DATA
+
+#Shuffle the dataset
+set.seed(1234)
+gChores <- runif(nrow(Chores))
+dataRChores <- Chores[order(gChores),]
+
+sample_sizeChores <- floor(.70* nrow(dataRChores))
+set.seed(498)
+intChores <- sample(seq_len(nrow(Chores)),size=sample_sizeChores)
+trainRChores   <- Chores[intChores,]
+testRChores    <- Chores[-intChores,]
+
+
+# Model Base
+PAMlogitChores <- glm(HR.Median ~ .-HR-activityID-Subject, data=trainRChores, family="binomial")
+summary(PAMlogitChores)
+#AIC 40411
+BIC(PAMlogitChores)
+# 40691.42
+
+varImp(PAMlogitChores)
+pR2(PAMlogitChores) #McFadden .3902
+
+
+# Model 1
+PAMlogitChores1 <- glm(HR.Median ~ .-HR-activityID-Subject-Time, data=trainRChores, family="binomial")
+summary(PAMlogitChores1)
+#AIC 50031
+BIC(PAMlogitChores1)
+# 50303.42
+
+varImp(PAMlogitChores1)
+pR2(PAMlogitChores1) #McFadden .245
+
+
+
+# Model 2
+PAMlogitChores2 <- glm(HR.Median ~ .-HR-Subject-activityID-HandGyro.1-HandGyro.2-HandGyro.3-HandMag.3-ChestGyro.1
+                       -ChestGyro.3-AnkleAccel16.2-AnkleAccel16.3-AnkleGyro.1-AnkleMag.1
+                       , data=trainRChores, family="binomial")
+summary(PAMlogitChores2)
+#AIC 40440
+BIC(PAMlogitChores2)
+# 40633.29
+
+varImp(PAMlogitChores2)
+pR2(PAMlogitChores2) #McFadden .3895
+
+
+
+# Model 3
+PAMlogitChores3 <- glm(HR.Median ~ .-HR-Subject-activityID-HandGyro.1-HandGyro.3-HandMag.3-ChestGyro.1
+                       -ChestGyro.3-AnkleAccel16.2-AnkleAccel16.3-AnkleMag.1
+                       , data=trainRChores, family="binomial")
+summary(PAMlogitChores3)
+#AIC 40421
+BIC(PAMlogitChores3)
+# 40631.2
+
+varImp(PAMlogitChores3)
+pR2(PAMlogitChores3) #McFadden .3898
+
+
+
+# Model 4
+PAMlogitChores4 <- glm(HR.Median ~ .-HR-Subject-activityID-HandGyro.1-HandGyro.2-HandGyro.3-HandMag.2-HandMag.3-ChestMag.1-ChestGyro.1
+                       -ChestGyro.3-AnkleGyro.1-AnkleGyro.3-AnkleAccel16.2-AnkleAccel16.3-AnkleMag.1
+                       , data=trainRChores, family="binomial")
+summary(PAMlogitChores4)
+#AIC 40472
+BIC(PAMlogitChores4)
+# 40638.51
+
+varImp(PAMlogitChores4)
+pR2(PAMlogitChores4) #McFadden .389
+
+
+
+
+predChores <- predict(PAMlogitChores3, newdata=testChores, type="response")
+accuracy <- table(predChores, testChores[,"HR.Median"])
+sum(diag(accuracy))/sum(accuracy)
+# 0.0000488203
+table(testChores$HR.Median, predChores > .5)
+
+#    FALSE TRUE
+#  0  9060 1765
+#  1  1910 7748
+
+predChoresTrain <- predict(PAMlogitChores3, type="response")
+table(trainChores$HR.Median, predChoresTrain > .5)
+
+#    FALSE  TRUE
+#  0 21072  3868
+#  1  4642 18211
+
+
+# Calculate Odds Ratios
+exp(coef(PAMlogitChores3))
+
+# ROC
+c <- roc(HR.Median ~ predChores, data = testChores)
+plot(c, col="green", main="Chores")
+
+# Create Lift Chart
+plotLift(predChores, testChores[,"HR.Median"], cumulative=TRUE, n.buckets=100, main="Chores Lift")
+gains(testChores[,"HR.Median"], predChores, groups=10, optimal=TRUE, percents=TRUE)
+
+#*************************************************************************************************
+  
+  # Complete Boxplots
+  boxplot(Time ~ HR.Median, data=data, xlab="HR Category", ylab="Time", main="All Subjects Subset Boxplots")
+
+#Temp
+boxplot(HandTemp ~ HR.Median, data=data, xlab="HR Category", ylab="Hand Temperature", main="All Subjects Subset Boxplots")
+boxplot(ChestTemp ~ HR.Median, data=data, xlab="HR Category", ylab="Chest Temperature", main="All Subjects Subset Boxplots")
+boxplot(AnkleTemp ~ HR.Median, data=data, xlab="HR Category", ylab="Ankle Temperature", main="All Subjects Subset Boxplots")
+
+#Accel
+boxplot(HandAccel16.1 ~ HR.Median, data=data, xlab="HR Category", ylab="HandAccel16.1", main="All Subjects Subset Boxplots") 
+boxplot(HandAccel16.2 ~ HR.Median, data=data, xlab="HR Category", ylab="HandAccel16.2", main="All Subjects Subset Boxplots") 
+boxplot(HandAccel16.3 ~ HR.Median, data=data, xlab="HR Category", ylab="HandAccel16.3", main="All Subjects Subset Boxplots") 
+
+boxplot(ChestAccel16.1 ~ HR.Median, data=data, xlab="HR Category", ylab="ChestAccel16.1", main="All Subjects Subset Boxplots") 
+boxplot(ChestAccel16.2 ~ HR.Median, data=data, xlab="HR Category", ylab="ChestAccel16.2", main="All Subjects Subset Boxplots") 
+boxplot(ChestAccel16.3 ~ HR.Median, data=data, xlab="HR Category", ylab="ChestAccel16.3", main="All Subjects Subset Boxplots") 
+
+boxplot(AnkleAccel16.1 ~ HR.Median, data=data, xlab="HR Category", ylab="AnkleAccel16.1", main="All Subjects Subset Boxplots") 
+boxplot(AnkleAccel16.2 ~ HR.Median, data=data, xlab="HR Category", ylab="AnkleAccel16.2", main="All Subjects Subset Boxplots") 
+boxplot(AnkleAccel16.3 ~ HR.Median, data=data, xlab="HR Category", ylab="AnkleAccel16.3", main="All Subjects Subset Boxplots")
+
+#Gyro
+boxplot(HandGyro.1 ~ HR.Median, data=data, xlab="HR Category", ylab="HandGyro1", main="All Subjects Subset Boxplots") 
+boxplot(HandGyro.2 ~ HR.Median, data=data, xlab="HR Category", ylab="HandGyro2", main="All Subjects Subset Boxplots") 
+boxplot(HandGyro.3 ~ HR.Median, data=data, xlab="HR Category", ylab="HandGyro3", main="All Subjects Subset Boxplots") 
+
+boxplot(ChestGyro.1 ~ HR.Median, data=data, xlab="HR Category", ylab="ChestGyro1", main="All Subjects Subset Boxplots") 
+boxplot(ChestGyro.2 ~ HR.Median, data=data, xlab="HR Category", ylab="ChestGyro2", main="All Subjects Subset Boxplots")
+boxplot(ChestGyro.3 ~ HR.Median, data=data, xlab="HR Category", ylab="ChestGyro3", main="All Subjects Subset Boxplots") 
+
+boxplot(AnkleGyro.1 ~ HR.Median, data=data, xlab="HR Category", ylab="AnkleGyro1", main="All Subjects Subset Boxplots") 
+boxplot(AnkleGyro.2 ~ HR.Median, data=data, xlab="HR Category", ylab="AnkleGyro2", main="All Subjects Subset Boxplots") 
+boxplot(AnkleGyro.3 ~ HR.Median, data=data, xlab="HR Category", ylab="AnkleGyro3", main="All Subjects Subset Boxplots")
+
+#Magnet
+boxplot(HandMag.1 ~ HR.Median, data=data, xlab="HR Category", ylab="HandMag1", main="All Subjects Subset Boxplots") 
+boxplot(HandMag.2 ~ HR.Median, data=data, xlab="HR Category", ylab="HandMag2", main="All Subjects Subset Boxplots") 
+boxplot(HandMag.3 ~ HR.Median, data=data, xlab="HR Category", ylab="HandMag3", main="All Subjects Subset Boxplots") 
+
+boxplot(ChestMag.1 ~ HR.Median, data=data, xlab="HR Category", ylab="ChestMag1", main="All Subjects Subset Boxplots") 
+boxplot(ChestMag.2 ~ HR.Median, data=data, xlab="HR Category", ylab="ChestMag2", main="All Subjects Subset Boxplots") 
+boxplot(ChestMag.3 ~ HR.Median, data=data, xlab="HR Category", ylab="ChestMag3", main="All Subjects Subset Boxplots") 
+
+boxplot(AnkleMag.1 ~ HR.Median, data=data, xlab="HR Category", ylab="AnkleMag1", main="All Subjects Subset Boxplots")
+boxplot(AnkleMag.2 ~ HR.Median, data=data, xlab="HR Category", ylab="AnkleMag2", main="All Subjects Subset Boxplots")
+boxplot(AnkleMag.3 ~ HR.Median, data=data, xlab="HR Category", ylab="AnkleMag3", main="All Subjects Subset Boxplots")
+
+
+#Complete Histograms
+hist(data$Time)
+hist(data$HR)
+
+#Temp
+hist(data$HandTemp)
+hist(data$ChestTemp)
+hist(data$AnkleTemp)
+
+#Accel
+hist(data$HandAccel16.1)
+hist(data$HandAccel16.2)
+hist(data$HandAccel16.3)
+
+hist(data$ChestAccel16.1)
+hist(data$ChestAccel16.2)
+hist(data$ChestAccel16.3)
+
+hist(data$AnkleAccel16.1)
+hist(data$AnkleAccel16.2)
+hist(data$AnkleAccel16.3)
+
+#Gyro
+hist(data$HandGyro.1)
+hist(data$HandGyro.2)
+hist(data$HandGyro.3)
+
+hist(data$ChestGyro.1)
+hist(data$ChestGyro.2)
+hist(data$ChestGyro.3)
+
+hist(data$AnkleGyro.1)
+hist(data$AnkleGyro.2)
+hist(data$AnkleGyro.3)
+
+#Magnet
+hist(data$HandMag.1)
+hist(data$HandMag.2)
+hist(data$HandMag.3)
+
+hist(data$ChestMag.1)
+hist(data$ChestMag.2)
+hist(data$ChestMag.3)
+
+hist(data$AnkleMag.1)
+hist(data$AnkleMag.2)
+hist(data$AnkleMag.3)
+
+
+
+
+# Complete Sample 70/30
+
+sample_size <- floor(.70* nrow(data))
+set.seed(498)
+int <- sample(seq_len(nrow(data)),size=sample_size)
+train   <- data[int,]
+test    <- data[-int,]
+
+# EDA TREE WITH RANDOMIZED DATA
+
+
+#Shuffle the dataset
+set.seed(1234)
+g <- runif(nrow(data))
+dataR <- data[order(g),]
+
+sample_size <- floor(.70* nrow(dataR))
+set.seed(498)
+int <- sample(seq_len(nrow(data)),size=sample_size)
+trainR   <- data[int,]
+testR    <- data[-int,]
+
+
+
+PAMlogit <- glm(HR.Median ~ .-HR-Subject-activityID, data=trainR, family="binomial")
+summary(PAMlogit)
+# AIC 67466
+BIC(PAMlogit)
+# 67776.6
+
+varImp(PAMlogit)
+pR2(PAMlogit) #McFadden .604
+
+
+# Model 1
+PAMlogit1 <- glm(HR.Median ~ .-HR-Subject-Time-activityID, data=trainR, family="binomial")
+summary(PAMlogit1)
+# AIC 97965
+BIC(PAMlogit1)
+# 98266.3
+
+varImp(PAMlogit1)
+pR2(PAMlogit1) #McFadden .425
+
+
+# Model 2
+PAMlogit2 <- glm(HR.Median ~ .-HR-Subject-activityID-HandAccel16.1-HandAccel16.3-HandGyro.1-HandGyro.2-HandGyro.3-HandMag.2-ChestAccel16.3
+                 -ChestGyro.1-ChestGyro.2-ChestGyro.3-AnkleAccel16.2-AnkleAccel16.3-AnkleGyro.1-AnkleGyro.2-AnkleGyro.3-AnkleMag.2
+                 , data=trainR, family="binomial")
+summary(PAMlogit2)
+#AIC 67826
+BIC(PAMlogit2)
+# 67981.9
+
+varImp(PAMlogit2)
+pR2(PAMlogit2) #McFadden .602
+
+
+
+# Model 3
+PAMlogit3 <- glm(HR.Median ~ .-HR-Subject-activityID-HandAccel16.1-HandGyro.1-ChestAccel16.3
+                 -ChestGyro.1-ChestGyro.2-ChestGyro.3-AnkleAccel16.2-AnkleGyro.1-AnkleGyro.2-AnkleGyro.3-AnkleMag.2
+                 , data=trainR, family="binomial")
+summary(PAMlogit3)
+#AIC 67760
+BIC(PAMlogit3)
+# 67964
+
+varImp(PAMlogit3)
+pR2(PAMlogit3) #McFadden .602
+
+
+
+# Model 4
+PAMlogit4 <- glm(HR.Median ~ .-HR-Subject-activityID-HandAccel16.1-HandGyro.1-HandMag.2-ChestAccel16.3
+                 -ChestGyro.1-ChestGyro.2-AnkleGyro.1-AnkleGyro.2-AnkleGyro.3-AnkleMag.2
+                 , data=trainR, family="binomial")
+summary(PAMlogit4)
+#AIC 67765
+BIC(PAMlogit4)
+# 67979.2
+
+varImp(PAMlogit4)
+pR2(PAMlogit4) #McFadden .602
+
+
+
+pred <- predict(PAMlogit3, newdata=test, type="response")
+accuracy <- table(pred, test[,"HR.Median"])
+sum(diag(accuracy))/sum(accuracy)
+# 0.000018993
+table(test$HR.Median, pred > .5)
+
+#    FALSE  TRUE
+#  0 24183  2416
+#  1  3121 22931
+
+predTrain <- predict(PAMlogit3, type="response")
+table(train$HR.Median, predTrain > .5)
+
+#    FALSE  TRUE
+#  0 55934  5850
+#  1  7229 53836
+
+
+# Calculate Odds Ratios
+exp(coef(PAMlogit3))
+
+# ROC
+d <- roc(HR.Median ~ pred, data = test)
+plot(d, col="black", main="All")
+
+# Create Lift Chart
+plotLift(pred, test[,"HR.Median"], cumulative=TRUE, n.buckets=100, main="All Lift")
+gains(test[,"HR.Median"], pred, groups=10, optimal=TRUE, percents=TRUE)
+
+
+
+# LINEAR MODELING
+
+
+# EDA #
+hand<- grep('^Hand', names(data), value = TRUE)
+chest<- grep('^Chest', names(data), value = TRUE)
+ankle<- grep('^Ankle', names(data), value = TRUE)
+
+# Hist #
+par(mfrow=c(3,4))
+qplot(data$HandTemp, geom="histogram")
+qplot(data$HandAccel16.1, geom="histogram")
+qplot(data$HandAccel16.2, geom="histogram")
+qplot(data$HandAccel16.3, geom="histogram")
+qplot(data$HandGyro.1, geom="histogram")
+qplot(data$HandGyro.2, geom="histogram")
+qplot(data$HandGyro.3, geom="histogram")
+qplot(data$HandMag.1, geom="histogram")
+qplot(data$HandMag.2, geom="histogram")
+qplot(data$HandMag.3, geom="histogram")
+par(mfrow = c(1,1))
+
+#heatmap hand#
+require(reshape)
+require(scales)
+require(ggplot2)
+hand.cor <-cor(data[,c(3, 4:13)])
+handmelt <- melt(hand.cor, varnames = c("x", "y"))
+handmelt <- handmelt[order(handmelt$value),]
+ggplot(handmelt, aes(x=x, y=y)) + geom_tile(aes(fill = value))+scale_fill_gradient2(low=muted("red"), mid="white", high = "steelblue", guide = guide_colorbar(ticks=FALSE, barheight = 10,main="heatmap hand variables and heart rate"), limits=c(-1,1))+theme_minimal()+labs(x=NULL,y=NULL)
+
+#heatmap chest#
+chest.cor <-cor(data[,c(3, 14:23)])
+chestmelt <- melt(chest.cor, varnames = c("x", "y"))
+chestmelt <- chestmelt[order(chestmelt$value),]
+ggplot(chestmelt, aes(x=x, y=y)) + geom_tile(aes(fill = value))+scale_fill_gradient2(low=muted("red"), mid="white", high = "steelblue", guide = guide_colorbar(ticks=FALSE, barheight = 10), limits=c(-1,1))+theme_minimal()+labs(x=NULL,y=NULL)
+
+#heatmap ankle#
+ankle.cor <-cor(data[,c(3, 24:33)])
+anklemelt <- melt(ankle.cor, varnames = c("x", "y"))
+anklemelt <- anklemelt[order(anklemelt$value),]
+ggplot(anklemelt, aes(x=x, y=y)) + geom_tile(aes(fill = value))+scale_fill_gradient2(low=muted("red"), mid="white", high = "steelblue", guide = guide_colorbar(ticks=FALSE, barheight = 10), limits=c(-1,1))+theme_minimal()+labs(x=NULL,y=NULL)
+
+#Pairs hand, chest, ankle#
+pairs(data[,c(3,14:23)])
+pairs(data[,c(3,4:13)])
+pairs(data[,c(3,24:33)])
+
+
+
+## Model 1 All Variables ##
+set.seed(19)
+train <- sample(1:nrow(data),0.70*nrow(data))
+fit0 <- lm(HR~.-activityID-HR.Median, data = data, subset = train)
+fit1 <- lm(HR~.-HR.Median-Time-HandAccel16.1-HandTemp-ChestAccel16.3-activityID-HandGyro.1-ChestGyro.1-AnkleAccel16.1-AnkleGyro.1-AnkleGyro.2-AnkleGyro.3+poly(ChestTemp,7)+poly(AnkleTemp,7)+poly(HandTemp,7)+poly(Time,7), data = data, subset = train)
+fit2 <- step(fit1)
+summary(fit2)
+mean((total$HR -predict(fit2 , data))[-train ]^2)
+summary(fit0)
+mean((total$HR -predict(fit0 , data))[-train ]^2)
+
+## fit metrics fit 2##
+fit2.stdres = rstandard(fit2)
+qqnorm(fit2.stdres, 
+       ylab="Standardized Residuals", 
+       xlab="Normal Scores", 
+       main="HR Prediction") 
+qqline(fit2.stdres) 
+
+par(mfrow=c(2,3))
+hist(fit2.stdres)
+plot(fit2, which=2)
+plot(fit2, which=1)
+hist(fit2, which = 4)
+plot(fit2, which=5)
+plot(fit2, which=6)
+par(mfrow=c(1,1))
+
+
+## Model 2 Best Subset ##
+library (leaps)
+set.seed (17)
+train=sample(c(TRUE,FALSE),nrow(data),rep=TRUE)
+test=(!train)
+
+regfit.best=regsubsets(HR~.-HR.Median-activityID,data= data[train,],nvmax =19)
+test.mat=model.matrix(HR~.-HR.Median-activityID,data=data[test,])
+val.errors =rep(NA ,19)
+for(i in 1:19){
+  coefi=coef(regfit.best,id=i)
+  pred=test.mat[,names(coefi)]%*% coefi
+  val.errors [i]= mean((total$HR[test]-pred)^2)
+}
+which.min(val.errors)
+coef(regfit.best,19)
+
+## Model 3 Ridge ##
+x=model.matrix(HR~.-HR.Median-activityID,data)[,-1]
+y=data$HR
+
+library(glmnet)
+grid =10^seq(10,-2,length=100)
+ridge.mod=glmnet(x,y,alpha=0,lambda=grid)
+
+set.seed (1)
+train=sample(1:nrow(x),nrow(x)/2)
+test=(-train )
+y.test=y[test]
+
+# CVal Ridge #
+set.seed (12)
+cv.out=cv.glmnet(x[train,],y[train],alpha=0)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+bestlam
+ridge.pred=predict(ridge.mod,s=bestlam ,newx=x[test ,])
+mean((ridge.pred-y.test)^2)
+
+out=glmnet(x,y,alpha =0)
+predict (out,type="coefficients",s=bestlam )[1:20 ,]
+
+## Lasso ##
+lasso.mod =glmnet(x[train ,],y[train],alpha =1,lambda =grid)
+plot(lasso.mod)
+set.seed (11)
+cv.out=cv.glmnet(x[train ,],y[train],alpha =1)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+lasso.pred=predict(lasso.mod ,s=bestlam ,newx=x[test ,])
+mean((lasso.pred -y.test)^2)
+
+out=glmnet(x,y,alpha =1, lambda =grid)
+lasso.coef=predict(out ,type ="coefficients",s=bestlam )[1:30 ,]
+lasso.coef[lasso.coef!=0]
+
+## PCR ##
+library (pls)
+set.seed (2)
+pcr.fit=pcr(HR~.-HR.Median-activityID, data=data ,subset=train,scale =TRUE,validation ="CV")
+validationplot(pcr.fit,val.type="MSEP")
+pcr.pred=predict (pcr.fit ,x[test ,], ncomp =25)
+mean((pcr.pred-y.test)^2)
+
+
+## PLS ##
+library (pls)
+set.seed (1)
+x=model.matrix(HR~.-HR.Median-activityID,data)[,-1]
+y=total$HR
+train=sample(1:nrow(x),nrow(x)*.70)
+test=(-train )
+y.test=y[test]
+grid =10^seq(10,-2,length=100)
+
+pls.fit=plsr(HR~.-HR.Median-activityID, data=data ,subset=train ,scale=TRUE,validation ="CV")
+summary(pls.fit)
+pls.pred=predict(pls.fit ,x[test ,], ncomp =8)
+mean((pls.pred -y.test)^2)
+
+pls.fit=plsr(HR~.-HR.Median-activityID, data=data,scale=TRUE ,ncomp =8)
+summary(pls.fit)
+
+## Fit and Plots PLS ##
+plot(RMSEP(pls.fit), legendpos = "topright")
+
+
+plot(pls.fit, ncomp = 8, asp = 1, line = TRUE)
+plot(pls.fit, plottype = "scores", comps = 1:8)
+plot(pls.fit, plottype = "correlation", comps =8)
+
+explvar(pls.fit)
+plot(pls.fit, "loadings", comps = 1:8, legendpos = "topleft", xlab = "nm") > abline(h = 0)
+pls.fit$loadings
